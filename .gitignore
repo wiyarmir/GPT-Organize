@@ -1,0 +1,6 @@
+*.gpt
+*.gp3
+*.gp4
+*.gp5
+build
+*.class
