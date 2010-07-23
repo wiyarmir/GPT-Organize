@@ -1,6 +1,11 @@
+*.jar
 *.gpt
 *.gp3
 *.gp4
 *.gp5
-build
+/build
 *.class
+*.orig
+*~
+\#*#
+!.gitignore

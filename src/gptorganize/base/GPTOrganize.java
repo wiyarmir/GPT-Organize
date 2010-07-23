@@ -23,43 +23,119 @@ public class GPTOrganize {
     private static String unkartist = "Unknown Artist";
     private static String unkalbum = "Unknown Album";
 
-    public static void test() throws IOException {
+    public static void test() {
         String CurLine = ""; // Line read from standard in
         InputStreamReader converter = new InputStreamReader(System.in);
         BufferedReader in = new BufferedReader(converter);
 
-        String cwd = (new File(".")).getCanonicalPath();
+        File cwd = new File(".");
         System.out.println("Estamos en " + cwd);
-        LinkedList<File> allfiles = new LinkedList();
+        LinkedList<File> allfiles;
+        try {
 
-        for (int i = 0; i < OKexts.size(); i++) {
-            allfiles.addAll(getAllFilesThatMatchFilenameExtension(cwd, "*." + OKexts.get(i)));
+            allfiles = getAllFilesInSubdirs(cwd);
+
+        } catch (IOException e) {
+            System.out.println("Imposible recuperar archivos del directorio:" + e);
+            return;
         }
-
-        System.out.println("Partituras encontradas:" + allfiles.size());
+        System.out.println("Numero de partituras encontradas:" + allfiles.size());
         System.out.println("----------------------------");
 
         Iterator<File> ite = allfiles.iterator();
 
         while (ite.hasNext()) {
             File f = ite.next();
-            TGSong s = readSong(f);
-            String newfilename;
-            System.out.println(showInfo(s));
-            if (!s.getName().isEmpty()) {
-                newfilename = s.getName() + f.getName().substring(f.getName().lastIndexOf("."));
-            } else {
-                newfilename = f.getName();
+            try {
+                doFileWork(f);
+            } catch (Exception e) {
+                System.out.println("wehe!!" + e);
             }
-            newfilename = sanitizeFilename(newfilename);
+            System.out.println("----------------------------");
+        }
+
+        System.out.println("No hay más archivos");
+        System.out.println("Eliminar carpetas vacías(experimental)?: (S/N)");
+        try {
+            CurLine = in.readLine();
+        } catch (Exception e) {
+        }
+        if (CurLine.startsWith("S") || CurLine.startsWith("s")) {
+            System.out.println("Eliminando carpetas vacías:");
+            try {
+                removeEmptySubdirs(cwd);
+            } catch (Exception e) {
+                System.out.println(e);
+            }
+        }
+    }
+
+    /**
+     *
+     * @param basedir
+     * @throws IOException
+     */
+    private static void removeEmptySubdirs(File basedir) throws IOException {
+        File[] stuff = basedir.listFiles();
+        for (int i = 0; i < stuff.length; i++) {
+            if (stuff[i].isDirectory()) {
+                if (stuff[i].listFiles().length < 1) {
+                    System.out.println(stuff[i].getName() + " is empty. Deleting...");
+                    stuff[i].delete();
+                } else {
+                    removeEmptySubdirs(stuff[i]);
+                }
+            }
+        }
+    }
+
+    private static LinkedList<File> getAllFilesInSubdirs(File dir) throws IOException {
+        LinkedList<File> allfiles;
+        allfiles = new LinkedList<File>(FileUtils.listFiles(dir, array, true));
+        return allfiles;
+    }
+
+    private static LinkedList<File> getAllFilesInDir(File dir) throws IOException {
+        LinkedList<File> allfiles;
+        allfiles = new LinkedList<File>(FileUtils.listFiles(dir, array, false));
+        return allfiles;
+
+    }
+
+    private static File getDuplicatedFilename(File orig, int index) throws IOException {
+        File ret = null;
+        String newname = orig.getCanonicalPath().substring(0, orig.getCanonicalPath().lastIndexOf('.') - 1) + " copia " + Integer.toString(index) + orig.getName().substring(orig.getName().lastIndexOf("."));
+        ret = new File(newname);
+        return ret;
+    }
+
+    private static void doFileWork(File in) throws IOException {
+        File cwd = (new File("."));
+        doFileWork(in, cwd);
+    }
+
+    private static void doFileWork(File in, File destdir) throws IOException {
+        String cwd = destdir.getCanonicalPath();
+        TGSong s = readSong(in);
+        String newfilename;
+        System.out.println("Old Path:" + in.getCanonicalPath());
+        System.out.println(showInfo(s));
+        if (!s.getName().isEmpty()) {
+            newfilename = s.getName() + in.getName().substring(in.getName().lastIndexOf("."));
+        } else {
+            newfilename = in.getName();
+        }
+        newfilename = sanitizeFilename(newfilename);
+        newfilename = in.getCanonicalPath().substring(0, in.getCanonicalPath().lastIndexOf(File.separatorChar)) + File.separator + newfilename;
+        if (newfilename == null ? in.getName() != null : !newfilename.equals(in.getName())) {
             File newname = new File(newfilename);
-            if (!f.renameTo(newname)) {
-                System.out.println("Error renamig " + f.getName() + " to " + newname.getName());
+            if (!in.renameTo(newname)) {
+                System.out.println("Error renamig " + in.getName() + " to " + newname.getName());
             } else {
                 System.out.println("New filename:" + newname);
                 String art = s.getArtist(), alb = s.getAlbum();
-                art = sanitizeFilename(art);
-                alb = sanitizeFilename(alb);
+                art = sanitizeDirname(art);
+                alb = sanitizeDirname(alb);
                 if (alb.isEmpty()) {
                     alb = unkalbum;
                 }
@@ -70,18 +146,19 @@ public class GPTOrganize {
                 newdest = cwd + File.separator + sanitizeFilename(newdest);
                 File dest = new File(newdest);
                 System.out.println("New dest:" + dest);
+                int i = 1;
+                while (newname.equals(dest)) {
+                    System.out.println("Ya existe \"" + newname.getName() + "\"");
+                    newname.renameTo(getDuplicatedFilename(in, i));
+                    System.out.println("Ahora es " + newname.getName());
+                }
                 try {
                     FileUtils.moveFileToDirectory(newname, dest, true);
                 } catch (IOException e) {
                     System.out.println("Error!!:" + e);
                 }
             }
-
-            System.out.println("----------------------------");
         }
-
-        System.out.println("No hay más archivos");
-
     }
 
     private static Collection getAllFilesThatMatchFilenameExtension(String directoryName, String extension) {
@@ -187,7 +264,10 @@ public class GPTOrganize {
         while (s.endsWith(" ")) {
             s = s.substring(0, s.length());
         }
-        s.replaceAll("s/[^\\w\\&%'`\\-\\@{}~!#\\(\\)&_\\^\\+,\\.=\\[\\]]//g", "_");
+        while (s.startsWith(" ")) {
+            s = s.substring(1);
+        }
+        s.replaceAll("[\\&%'`\\-\\@{}~!#\\(\\)&_\\^\\+,\\.=\\[\\]:]", "_");
         return ret;
     }
 
@@ -196,7 +276,10 @@ public class GPTOrganize {
         while (s.startsWith(" ")) {
             s = s.substring(1);
         }
-        s.replaceAll("s/[^\\w\\&%'`\\-\\@{}~!#\\(\\)&_\\^\\+,\\.=\\[\\]]//g", "_");
+        while (s.endsWith(" ")) {
+            s = s.substring(0, s.length());
+        }
+        s.replaceAll("[\\&%'`\\-\\@{}~!#\\(\\)&_\\^\\+,\\.=\\[\\]:]", "_");
         return ret;
     }
 }
