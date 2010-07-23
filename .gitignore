@@ -4,6 +4,7 @@
 *.gp4
 *.gp5
 /build
+/dist
 *.class
 *.orig
 *~
