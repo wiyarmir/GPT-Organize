@@ -3,8 +3,8 @@
 *.gp3
 *.gp4
 *.gp5
-/build
-/dist
+build/
+dist/
 *.class
 *.orig
 *~
